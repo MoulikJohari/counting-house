@@ -4,13 +4,13 @@ import { AppLayout } from '../components/AppLayout';
 import { CsvImportButton } from '../components/CsvImportButton';
 import { ExportMenu } from '../components/ExportMenu';
 import { IconDelete, IconEdit, IconPay } from '../components/icons';
-import { useLedger } from '../hooks/useLedger';
+import { useLedgerContext } from '../ledger/LedgerContext';
 import { invoicesExportRows } from '../lib/exportRows';
-import { GST_RATES, TDS_RATES, fmt, fmtDate, invCalc, todayStr } from '../lib/ledger';
+import { GST_RATES, TDS_RATES, fmtDate, invCalc, todayStr } from '../lib/ledger';
 import type { Invoice } from '../types';
 
 export function InvoicesPage() {
-  const { data, loading, reload, currency, pos, invoices } = useLedger();
+  const { data, loading, reload, pos, invoices, format } = useLedgerContext();
   const [footMsg, setFootMsg] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -149,7 +149,7 @@ export function InvoicesPage() {
           {aging.map((b) => (
             <div key={b.l} className={`age ${b.hot && b.amt > 0 ? 'hot' : ''}`}>
               <div className="lbl">{b.l}</div>
-              <div className="amt2">{fmt(b.amt, currency)}</div>
+              <div className="amt2">{format(b.amt)}</div>
               <div className="cnt">
                 {b.cnt} invoice{b.cnt === 1 ? '' : 's'}
               </div>
@@ -204,8 +204,8 @@ export function InvoicesPage() {
                           </span>
                         </td>
                         <td className={c.overdue ? 'due-od' : 'ref'}>{fmtDate(i.due_date)}</td>
-                        <td className="r amt hide-sm">{fmt(c.gross, currency)}</td>
-                        <td className="r amt">{fmt(c.balance, currency)}</td>
+                        <td className="r amt hide-sm">{format(c.gross)}</td>
+                        <td className="r amt">{format(c.balance)}</td>
                         <td className="r">
                           <div className="rowacts">
                             {c.status !== 'paid' && (
@@ -267,7 +267,7 @@ export function InvoicesPage() {
                     const remaining = Math.max(0, Number(p.amount) - inv);
                     return (
                       <option key={p.id} value={p.id}>
-                        {p.ref || p.company} · {p.company} ({fmt(remaining, currency)} left)
+                        {p.ref || p.company} · {p.company} ({format(remaining)} left)
                       </option>
                     );
                   })}
@@ -301,27 +301,27 @@ export function InvoicesPage() {
             <div className="calcbox">
               <div className="calcrow">
                 <span>Taxable</span>
-                <span className="mono">{fmt(invFormCalc.taxable, currency)}</span>
+                <span className="mono">{format(invFormCalc.taxable)}</span>
               </div>
               <div className="calcrow tot">
                 <span>Invoice total</span>
-                <span className="mono">{fmt(invFormCalc.gross, currency)}</span>
+                <span className="mono">{format(invFormCalc.gross)}</span>
               </div>
               <div className="calcrow">
                 <span>Expected in bank</span>
-                <span className="mono">{fmt(invFormCalc.net, currency)}</span>
+                <span className="mono">{format(invFormCalc.net)}</span>
               </div>
             </div>
             <div className="paywrap">
               <div className="cap">
                 <span>Payments received</span>
-                <span>{invFormCalc.balance > 0 ? fmt(invFormCalc.balance, currency) + ' balance' : 'Settled'}</span>
+                <span>{invFormCalc.balance > 0 ? format(invFormCalc.balance) + ' balance' : 'Settled'}</span>
               </div>
               {((formState.payments as { id?: string; date: string; amount: number }[]) || []).map((p, idx) => (
                 <div key={p.id || idx} className="payline">
                   <span className="ref">{fmtDate(p.date)}</span>
                   <span className="mono">
-                    {fmt(Number(p.amount), currency)}{' '}
+                    {format(Number(p.amount))}{' '}
                     <button
                       className="ico del"
                       type="button"

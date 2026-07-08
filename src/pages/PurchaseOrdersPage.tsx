@@ -4,13 +4,13 @@ import { AppLayout } from '../components/AppLayout';
 import { CsvImportButton } from '../components/CsvImportButton';
 import { ExportMenu } from '../components/ExportMenu';
 import { IconDelete, IconEdit } from '../components/icons';
-import { useLedger } from '../hooks/useLedger';
+import { useLedgerContext } from '../ledger/LedgerContext';
 import { posExportRows } from '../lib/exportRows';
-import { GST_RATES, fmt, fmtDate, poCalc, todayStr } from '../lib/ledger';
+import { GST_RATES, fmtDate, poCalc, todayStr } from '../lib/ledger';
 import type { PO } from '../types';
 
 export function PurchaseOrdersPage() {
-  const { data, loading, reload, currency, pos, invoices } = useLedger();
+  const { data, loading, reload, pos, invoices, format } = useLedgerContext();
   const [footMsg, setFootMsg] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export function PurchaseOrdersPage() {
                         <td className="ref">{fmtDate(p.date)}</td>
                         <td className="co">{p.company}</td>
                         <td className="ref">{p.ref || '—'}</td>
-                        <td className="r amt hide-sm">{fmt(c.val, currency)}</td>
+                        <td className="r amt hide-sm">{format(c.val)}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div className="bar">
@@ -121,7 +121,7 @@ export function PurchaseOrdersPage() {
                             <span className="ref">{c.pct}%</span>
                           </div>
                         </td>
-                        <td className="r amt">{fmt(c.remaining, currency)}</td>
+                        <td className="r amt">{format(c.remaining)}</td>
                         <td className="r">
                           <div className="rowacts">
                             <button className="ico" type="button" onClick={() => openForm(p.id)}>

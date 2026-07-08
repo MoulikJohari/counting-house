@@ -4,13 +4,13 @@ import { AppLayout } from '../components/AppLayout';
 import { CsvImportButton } from '../components/CsvImportButton';
 import { ExportMenu } from '../components/ExportMenu';
 import { IconDelete, IconEdit } from '../components/icons';
-import { useLedger } from '../hooks/useLedger';
+import { useLedgerContext } from '../ledger/LedgerContext';
 import { expensesExportRows } from '../lib/exportRows';
-import { CATS, CAT_COLOR, fmt, fmtDate, todayStr } from '../lib/ledger';
+import { CATS, CAT_COLOR, fmtDate, todayStr } from '../lib/ledger';
 import type { Recurring } from '../types';
 
 export function ExpensesPage() {
-  const { data, loading, reload, currency, expenses, recurring } = useLedger();
+  const { data, loading, reload, expenses, recurring, format } = useLedgerContext();
   const [footMsg, setFootMsg] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -163,7 +163,7 @@ export function ExpensesPage() {
                         {e.recurring_id && <span className="repeat"> ↻</span>}
                       </td>
                       <td className="hide-sm">{e.vendor || e.notes || '—'}</td>
-                      <td className="r amt">{fmt(Number(e.amount), currency)}</td>
+                      <td className="r amt">{format(Number(e.amount))}</td>
                       <td className="r">
                         <div className="rowacts">
                           <button className="ico" type="button" onClick={() => openForm(e.id)}>
@@ -255,7 +255,7 @@ export function ExpensesPage() {
                   </span>
                 </span>
                 <span>
-                  <span className="mono">{fmt(r.amount, currency)}/mo</span>{' '}
+                  <span className="mono">{format(r.amount)}/mo</span>{' '}
                   <button className="ico del" type="button" onClick={() => rmRecurring(r.id)}>
                     <IconDelete />
                   </button>

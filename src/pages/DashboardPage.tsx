@@ -11,14 +11,14 @@ import { useMemo, useRef, useState } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { api } from '../api/client';
 import { AppLayout } from '../components/AppLayout';
-import { useLedger } from '../hooks/useLedger';
-import { CATS, CAT_COLOR, compute, fmt, invCalc, monthKey, monthLabel } from '../lib/ledger';
+import { useLedgerContext } from '../ledger/LedgerContext';
+import { CATS, CAT_COLOR, compute, invCalc, monthKey, monthLabel } from '../lib/ledger';
 import type { Period } from '../types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 export function DashboardPage() {
-  const { data, loading, reload, currency, pos, invoices, expenses } = useLedger();
+  const { data, loading, reload, pos, invoices, expenses, format } = useLedgerContext();
   const [period, setPeriod] = useState<Period>('fy');
   const [footMsg, setFootMsg] = useState('');
   const restoreRef = useRef<HTMLInputElement>(null);
@@ -88,15 +88,6 @@ export function DashboardPage() {
     return Object.entries(map).sort((a, b) => b[1].inv + b[1].po - (a[1].inv + a[1].po));
   }, [stats]);
 
-  const onCurrency = async (c: string) => {
-    try {
-      await api.updateSettings(c);
-      await reload();
-    } catch (err) {
-      flash(err instanceof Error ? err.message : 'Failed');
-    }
-  };
-
   const onRestore = async (file: File) => {
     const text = await file.text();
     try {
@@ -124,13 +115,6 @@ export function DashboardPage() {
             </button>
           ))}
         </div>
-        <select className="ctl" value={currency} onChange={(e) => onCurrency(e.target.value)}>
-          <option value="₹">₹ INR</option>
-          <option value="$">$ USD</option>
-          <option value="€">€ EUR</option>
-          <option value="£">£ GBP</option>
-          <option value="AED ">AED</option>
-        </select>
       </div>
 
       <section>
@@ -138,45 +122,45 @@ export function DashboardPage() {
           <div className="lead">
             <p className="k">Net cash position</p>
             <div className="v mono" style={{ color: stats.net >= 0 ? '#BFE3D2' : '#E9B3A6' }}>
-              {fmt(stats.net, currency)}
+              {format(stats.net)}
             </div>
             <small>Collected minus expenses</small>
           </div>
           <div>
             <p className="k">Collected</p>
-            <div className="v in mono">{fmt(stats.collected, currency)}</div>
+            <div className="v in mono">{format(stats.collected)}</div>
             <small>{stats.invoiced ? Math.round((stats.collected / stats.invoiced) * 100) : 0}% of invoiced</small>
           </div>
           <div>
             <p className="k">Spent</p>
-            <div className="v out mono">{fmt(stats.exp, currency)}</div>
+            <div className="v out mono">{format(stats.exp)}</div>
             <small>{stats.fexp.length} entries</small>
           </div>
         </div>
         <div className="stats">
           <div className="stat">
             <p className="k">PO received</p>
-            <div className="n mono">{fmt(stats.po, currency)}</div>
+            <div className="n mono">{format(stats.po)}</div>
             <div className="meta">{stats.fpos.length} orders</div>
           </div>
           <div className="stat">
             <p className="k">Invoiced</p>
-            <div className="n mono">{fmt(stats.invoiced, currency)}</div>
+            <div className="n mono">{format(stats.invoiced)}</div>
             <div className="meta">{stats.finv.length} invoices (incl. GST)</div>
           </div>
           <div className="stat">
             <p className="k">Collected</p>
-            <div className="n mono">{fmt(stats.collected, currency)}</div>
+            <div className="n mono">{format(stats.collected)}</div>
             <div className="meta">received in bank</div>
           </div>
           <div className="stat">
             <p className="k">Outstanding</p>
-            <div className="n mono">{fmt(stats.outstanding, currency)}</div>
-            <div className="meta">{stats.overdue > 0 ? `${fmt(stats.overdue, currency)} overdue` : 'all current'}</div>
+            <div className="n mono">{format(stats.outstanding)}</div>
+            <div className="meta">{stats.overdue > 0 ? `${format(stats.overdue)} overdue` : 'all current'}</div>
           </div>
           <div className="stat">
             <p className="k">Expenses</p>
-            <div className="n mono">{fmt(stats.exp, currency)}</div>
+            <div className="n mono">{format(stats.exp)}</div>
             <div className="meta">this {period === 'month' ? 'month' : period === 'fy' ? 'FY' : 'all time'}</div>
           </div>
         </div>
@@ -241,10 +225,10 @@ export function DashboardPage() {
                 {byCompany.map(([co, v]) => (
                   <tr key={co}>
                     <td className="co">{co}</td>
-                    <td className="r amt">{fmt(v.po, currency)}</td>
-                    <td className="r amt hide-sm">{fmt(v.inv, currency)}</td>
-                    <td className="r amt">{fmt(v.coll, currency)}</td>
-                    <td className="r amt">{fmt(v.out, currency)}</td>
+                    <td className="r amt">{format(v.po)}</td>
+                    <td className="r amt hide-sm">{format(v.inv)}</td>
+                    <td className="r amt">{format(v.coll)}</td>
+                    <td className="r amt">{format(v.out)}</td>
                   </tr>
                 ))}
               </tbody>

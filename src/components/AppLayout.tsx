@@ -1,9 +1,22 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useLedgerContext } from '../ledger/LedgerContext';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, isSuperadmin } = useAuth();
+  const { currency, onCurrency } = useLedgerContext();
   const location = useLocation();
+  const [currErr, setCurrErr] = useState('');
+
+  const handleCurrency = async (c: string) => {
+    try {
+      await onCurrency(c);
+      setCurrErr('');
+    } catch (err) {
+      setCurrErr(err instanceof Error ? err.message : 'Failed to update currency');
+    }
+  };
 
   return (
     <div className="wrap">
@@ -40,6 +53,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             )}
           </nav>
+          <select className="ctl" value={currency} onChange={(e) => handleCurrency(e.target.value)}>
+            <option value="₹">₹ INR</option>
+            <option value="$">$ USD</option>
+            <option value="€">€ EUR</option>
+            <option value="£">£ GBP</option>
+            <option value="AED ">AED</option>
+          </select>
           <div className="user-menu">
             <span>{user?.name}</span>
             <button className="btn ghost sm" type="button" onClick={logout}>
@@ -48,6 +68,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      {currErr && (
+        <div className="login-error" style={{ margin: '8px 24px 0' }}>
+          {currErr}
+        </div>
+      )}
       {children}
     </div>
   );
