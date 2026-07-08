@@ -1,3 +1,7 @@
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -44,3 +48,15 @@ app.include_router(logs_router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+# Serve React frontend static assets (CSS/JS files)
+if os.path.isdir("dist"):
+    app.mount("/assets", StaticFiles(directory="dist/assets"), name="assets")
+
+# Catch-all route to serve the React index.html for all frontend pages
+@app.get("/{catchall:path}")
+async def serve_react_app(catchall: str):
+    index_path = os.path.join("dist", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Frontend build not found"}
