@@ -1,6 +1,6 @@
 import type { AuditLogList, Expense, Invoice, LedgerData, PO, Recurring, User } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 let token: string | null = localStorage.getItem('token');
 let onUnauthorized: (() => void) | null = null;
