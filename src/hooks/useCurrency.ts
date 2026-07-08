@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BASE_CURRENCY, formatCurrency, getRates, symbolToCode, type CurrencyCode } from '../lib/currency';
+import { BASE_CURRENCY, convertToBase, formatCurrency, getRates, symbolToCode, type CurrencyCode } from '../lib/currency';
 
 /**
  * Wraps the currently-selected currency (as stored in ledger settings, e.g. '₹' or '$')
@@ -41,6 +41,7 @@ export function useCurrency(selectedSymbol: string) {
       ratesLoading,
       ratesError,
       convert: (amountInBase: number) => amountInBase * rate,
+      convertToBase: (amountInSelected: number) => convertToBase(amountInSelected, rate),
       format: (amountInBase: number) => formatCurrency(amountInBase, code, rate),
     }),
     [code, rate, ratesLoading, ratesError],

@@ -10,7 +10,7 @@ import { GST_RATES, fmtDate, poCalc, todayStr } from '../lib/ledger';
 import type { PO } from '../types';
 
 export function PurchaseOrdersPage() {
-  const { data, loading, reload, pos, invoices, format } = useLedgerContext();
+  const { data, loading, reload, pos, invoices, format, convert, convertToBase } = useLedgerContext();
   const [footMsg, setFootMsg] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function PurchaseOrdersPage() {
     setEditId(id || null);
     if (id) {
       const rec = pos.find((x) => x.id === id);
-      setFormState(rec ? { ...rec } : {});
+      setFormState(rec ? { ...rec, amount: convert(rec.amount) } : {});
     } else {
       setFormState({ date: todayStr(), gst_rate: 0, notes: '' });
     }
@@ -33,7 +33,7 @@ export function PurchaseOrdersPage() {
   };
 
   const saveForm = async () => {
-    const amount = Number(formState.amount);
+    const amount = convertToBase(Number(formState.amount));
     if (amount <= 0) {
       flash('Enter an amount');
       return;
@@ -42,9 +42,10 @@ export function PurchaseOrdersPage() {
       flash('Enter a company');
       return;
     }
+    const payload = { ...formState, amount };
     try {
-      if (editId) await api.updatePO(editId, formState);
-      else await api.createPO(formState as Omit<PO, 'id'>);
+      if (editId) await api.updatePO(editId, payload);
+      else await api.createPO(payload as Omit<PO, 'id'>);
       setFormOpen(false);
       flash('Saved');
       await reload();

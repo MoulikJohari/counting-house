@@ -10,7 +10,7 @@ import { CATS, CAT_COLOR, fmtDate, todayStr } from '../lib/ledger';
 import type { Recurring } from '../types';
 
 export function ExpensesPage() {
-  const { data, loading, reload, expenses, recurring, format } = useLedgerContext();
+  const { data, loading, reload, expenses, recurring, format, convert, convertToBase } = useLedgerContext();
   const [footMsg, setFootMsg] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export function ExpensesPage() {
     setEditId(id || null);
     if (id) {
       const rec = expenses.find((x) => x.id === id);
-      setFormState(rec ? { ...rec } : {});
+      setFormState(rec ? { ...rec, amount: convert(Number(rec.amount)) } : {});
     } else {
       setFormState({ date: todayStr(), category: 'Flight' });
     }
@@ -36,14 +36,15 @@ export function ExpensesPage() {
   };
 
   const saveForm = async () => {
-    const amount = Number(formState.amount);
+    const amount = convertToBase(Number(formState.amount));
     if (amount <= 0) {
       flash('Enter an amount');
       return;
     }
+    const payload = { ...formState, amount };
     try {
-      if (editId) await api.updateExpense(editId, formState);
-      else await api.createExpense(formState);
+      if (editId) await api.updateExpense(editId, payload);
+      else await api.createExpense(payload);
       setFormOpen(false);
       flash('Saved');
       await reload();
@@ -76,7 +77,7 @@ export function ExpensesPage() {
       await api.createRecurring({
         label: recForm.label,
         category: recForm.category,
-        amount: Number(recForm.amount),
+        amount: convertToBase(Number(recForm.amount)),
         day: Number(recForm.day) || 1,
         start: recForm.start || new Date().toISOString().slice(0, 7),
       });

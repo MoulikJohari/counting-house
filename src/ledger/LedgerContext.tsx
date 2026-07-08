@@ -17,6 +17,7 @@ interface LedgerContextValue {
   onCurrency: (c: string) => Promise<void>;
   format: (amountInBase: number) => string;
   convert: (amountInBase: number) => number;
+  convertToBase: (amountInSelected: number) => number;
   code: string;
   ratesLoading: boolean;
   ratesError: string;
@@ -54,7 +55,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
   }, [user, reload]);
 
   const currency = data?.currency || '₹';
-  const { code, ratesLoading, ratesError, convert, format } = useCurrency(currency);
+  const { code, ratesLoading, ratesError, convert, convertToBase, format } = useCurrency(currency);
 
   const onCurrency = useCallback(
     async (c: string) => {
@@ -78,11 +79,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
       onCurrency,
       format,
       convert,
+      convertToBase,
       code,
       ratesLoading,
       ratesError,
     }),
-    [data, loading, error, reload, currency, onCurrency, format, convert, code, ratesLoading, ratesError],
+    [data, loading, error, reload, currency, onCurrency, format, convert, convertToBase, code, ratesLoading, ratesError],
   );
 
   return <LedgerContext.Provider value={value}>{children}</LedgerContext.Provider>;

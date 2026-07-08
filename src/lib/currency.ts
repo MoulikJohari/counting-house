@@ -67,6 +67,11 @@ export function convertAmount(amountInBase: number, rate: number) {
   return amountInBase * rate;
 }
 
+/** Inverse of convertAmount — turns a value entered in the selected display currency back into base (INR). */
+export function convertToBase(amountInSelected: number, rate: number) {
+  return amountInSelected / rate;
+}
+
 export function formatCurrency(amountInBase: number, code: CurrencyCode, rate: number) {
   const converted = convertAmount(amountInBase, rate);
   const meta = CURRENCY_META[code] ?? CURRENCY_META[BASE_CURRENCY];
