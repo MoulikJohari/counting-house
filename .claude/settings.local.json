@@ -21,7 +21,13 @@
       "Bash(pip show *)",
       "Bash(pip --version)",
       "Bash(npx tsc *)",
-      "Skill(run)"
+      "Skill(run)",
+      "Bash(ls -la .cursor)",
+      "Bash(cat .cursorrules)",
+      "Bash(cat .github/copilot-instructions.md)",
+      "Bash(find . -maxdepth 1 -iname \"*.bat\" -o -maxdepth 1 -iname \"*.ps1\" -o -maxdepth 1 -iname \"*.sh\")",
+      "Bash(find . -iname \"*.cursor*\" -not -path \"*/node_modules/*\")",
+      "Bash(find .github -type f)"
     ]
   }
 }
