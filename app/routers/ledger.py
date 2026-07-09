@@ -50,9 +50,10 @@ from app.services.ledger import (
     get_field,
     inv_calc,
     invoice_to_dict,
-    num,
+    parse_amount,
     parse_csv_rows,
     parse_date,
+    parse_xlsx_rows,
     po_calc,
     po_to_dict,
 )
@@ -685,18 +686,30 @@ def export_csv(
     )
 
 
-async def _read_csv_rows(file: UploadFile) -> list[dict[str, str]]:
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+async def _read_import_rows(file: UploadFile) -> list[tuple[int, dict[str, str]]]:
+    filename = (file.filename or "").lower()
     raw = await file.read()
-    try:
-        content = raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded") from exc
-    rows = parse_csv_rows(content)
+    if filename.endswith(".xlsx"):
+        rows = parse_xlsx_rows(raw)
+    elif filename.endswith(".csv"):
+        try:
+            content = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=400, detail="CSV must be UTF-8 encoded") from exc
+        rows = parse_csv_rows(content)
+    else:
+        raise HTTPException(status_code=400, detail="Please upload a .csv or .xlsx file")
     if not rows:
-        raise HTTPException(status_code=400, detail="CSV file has no data rows")
+        raise HTTPException(status_code=400, detail="File has no data rows")
     return rows
+
+
+def _row_error_message(exc: Exception) -> str:
+    """Compact, single-line description of a row-level import failure for logs/UI."""
+    orig = getattr(exc, "orig", None)
+    text = str(orig) if orig is not None else str(exc)
+    text = text.strip()
+    return (text.splitlines()[0] if text else exc.__class__.__name__)[:300]
 
 
 @router.post("/api/import/pos")
@@ -705,36 +718,55 @@ async def import_pos_csv(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    rows = await _read_csv_rows(file)
+    rows = await _read_import_rows(file)
+    seen_refs = {
+        ref.strip().lower()
+        for (ref,) in db.query(PurchaseOrder.ref).filter(PurchaseOrder.ref.isnot(None))
+        if ref and ref.strip()
+    }
     created = 0
     errors: list[str] = []
-    for idx, row in enumerate(rows, start=2):
+    for row_num, row in rows:
+        if all(v == "" for v in row.values()):
+            # Ghost row (e.g. a trailing blank row Excel keeps around) - skip silently.
+            continue
         company = get_field(row, "company")
         if not company:
-            errors.append(f"Row {idx}: company is required")
+            msg = "company is required"
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
             continue
         try:
+            ref = get_field(row, "ref", "po_ref", "po_number")
+            ref_key = ref.strip().lower() if ref else None
+            if ref_key and ref_key in seen_refs:
+                raise ValueError(f"duplicate ref '{ref}'")
             po = PurchaseOrder(
                 company=company,
-                ref=get_field(row, "ref", "po_ref", "po_number"),
+                ref=ref,
                 date=parse_date(get_field(row, "date")) or date.today(),
-                amount=num(get_field(row, "amount", "value")),
-                gst_rate=num(get_field(row, "gst_rate", "gstrate")),
+                amount=parse_amount(get_field(row, "amount", "value"), "amount"),
+                gst_rate=parse_amount(get_field(row, "gst_rate", "gstrate"), "gst_rate"),
                 notes=get_field(row, "notes"),
                 created_by=user.id,
             )
-            db.add(po)
+            with db.begin_nested():
+                db.add(po)
+                db.flush()
+            if ref_key:
+                seen_refs.add(ref_key)
             created += 1
-        except Exception as exc:  # noqa: BLE001 - surface row-level errors to the caller
-            errors.append(f"Row {idx}: {exc}")
-    db.flush()
+        except Exception as exc:  # noqa: BLE001 - row-level errors must never abort the batch
+            msg = _row_error_message(exc)
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
     AuditService.log(
         db,
         user=user,
         action="import",
         entity_type="po",
         entity_id=None,
-        summary=f"Imported {created} purchase order(s) from CSV",
+        summary=f"Imported {created} purchase order(s)",
         changes={"created": created, "errors": errors},
     )
     db.commit()
@@ -747,40 +779,58 @@ async def import_invoices_csv(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    rows = await _read_csv_rows(file)
+    rows = await _read_import_rows(file)
+    seen_refs = {
+        ref.strip().lower()
+        for (ref,) in db.query(Invoice.ref).filter(Invoice.ref.isnot(None))
+        if ref and ref.strip()
+    }
     created = 0
     errors: list[str] = []
-    for idx, row in enumerate(rows, start=2):
+    for row_num, row in rows:
+        if all(v == "" for v in row.values()):
+            continue
         company = get_field(row, "company")
         if not company:
-            errors.append(f"Row {idx}: company is required")
+            msg = "company is required"
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
             continue
         try:
+            ref = get_field(row, "ref", "invoice_ref", "invoice_number")
+            ref_key = ref.strip().lower() if ref else None
+            if ref_key and ref_key in seen_refs:
+                raise ValueError(f"duplicate ref '{ref}'")
             po_id_raw = get_field(row, "po_id")
             invoice = Invoice(
                 company=company,
-                ref=get_field(row, "ref", "invoice_ref", "invoice_number"),
+                ref=ref,
                 date=parse_date(get_field(row, "date")) or date.today(),
                 due_date=parse_date(get_field(row, "due_date", "duedate")),
                 po_id=UUID(po_id_raw) if po_id_raw else None,
-                amount=num(get_field(row, "amount", "taxable")),
-                gst_rate=num(get_field(row, "gst_rate", "gstrate")),
-                tds_rate=num(get_field(row, "tds_rate", "tdsrate")),
+                amount=parse_amount(get_field(row, "amount", "taxable"), "amount"),
+                gst_rate=parse_amount(get_field(row, "gst_rate", "gstrate"), "gst_rate"),
+                tds_rate=parse_amount(get_field(row, "tds_rate", "tdsrate"), "tds_rate"),
                 notes=get_field(row, "notes"),
                 created_by=user.id,
             )
-            db.add(invoice)
+            with db.begin_nested():
+                db.add(invoice)
+                db.flush()
+            if ref_key:
+                seen_refs.add(ref_key)
             created += 1
-        except Exception as exc:  # noqa: BLE001 - surface row-level errors to the caller
-            errors.append(f"Row {idx}: {exc}")
-    db.flush()
+        except Exception as exc:  # noqa: BLE001 - row-level errors must never abort the batch
+            msg = _row_error_message(exc)
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
     AuditService.log(
         db,
         user=user,
         action="import",
         entity_type="invoice",
         entity_id=None,
-        summary=f"Imported {created} invoice(s) from CSV",
+        summary=f"Imported {created} invoice(s)",
         changes={"created": created, "errors": errors},
     )
     db.commit()
@@ -793,35 +843,42 @@ async def import_expenses_csv(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    rows = await _read_csv_rows(file)
+    rows = await _read_import_rows(file)
     created = 0
     errors: list[str] = []
-    for idx, row in enumerate(rows, start=2):
+    for row_num, row in rows:
+        if all(v == "" for v in row.values()):
+            continue
         category = get_field(row, "category")
         if not category:
-            errors.append(f"Row {idx}: category is required")
+            msg = "category is required"
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
             continue
         try:
             expense = Expense(
                 category=category,
                 date=parse_date(get_field(row, "date")) or date.today(),
-                amount=num(get_field(row, "amount")),
+                amount=parse_amount(get_field(row, "amount"), "amount"),
                 vendor=get_field(row, "vendor"),
                 notes=get_field(row, "notes"),
                 created_by=user.id,
             )
-            db.add(expense)
+            with db.begin_nested():
+                db.add(expense)
+                db.flush()
             created += 1
-        except Exception as exc:  # noqa: BLE001 - surface row-level errors to the caller
-            errors.append(f"Row {idx}: {exc}")
-    db.flush()
+        except Exception as exc:  # noqa: BLE001 - row-level errors must never abort the batch
+            msg = _row_error_message(exc)
+            errors.append(f"Row {row_num}: {msg}")
+            print(f"Skipped row {row_num}: {msg}")
     AuditService.log(
         db,
         user=user,
         action="import",
         entity_type="expense",
         entity_id=None,
-        summary=f"Imported {created} expense(s) from CSV",
+        summary=f"Imported {created} expense(s)",
         changes={"created": created, "errors": errors},
     )
     db.commit()

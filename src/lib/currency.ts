@@ -1,4 +1,4 @@
-export type CurrencyCode = 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED';
+export type CurrencyCode = 'INR' | 'USD' | 'EUR' | 'GBP';
 
 export const BASE_CURRENCY: CurrencyCode = 'INR';
 
@@ -7,7 +7,6 @@ export const CURRENCY_META: Record<CurrencyCode, { symbol: string; locale: strin
   USD: { symbol: '$', locale: 'en-US' },
   EUR: { symbol: '€', locale: 'en-US' },
   GBP: { symbol: '£', locale: 'en-US' },
-  AED: { symbol: 'AED ', locale: 'en-US' },
 };
 
 // The rest of the app persists the *symbol* the user picked (see /api/settings),

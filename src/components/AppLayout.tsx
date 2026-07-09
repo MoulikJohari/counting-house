@@ -58,7 +58,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <option value="$">$ USD</option>
             <option value="€">€ EUR</option>
             <option value="£">£ GBP</option>
-            <option value="AED ">AED</option>
           </select>
           <div className="user-menu">
             <span>{user?.name}</span>

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { api } from '../api/client';
+import { downloadCsv, downloadXlsx } from '../lib/exportFormats';
 
 interface Props {
   kind: 'pos' | 'invoices' | 'expenses';
@@ -8,7 +9,13 @@ interface Props {
   onImported: () => Promise<unknown> | void;
 }
 
-export function CsvImportButton({ kind, label = 'Import CSV', onDone, onImported }: Props) {
+const TEMPLATE_HEADERS: Record<Props['kind'], string[]> = {
+  pos: ['date', 'company', 'ref', 'amount', 'gst_rate', 'notes'],
+  invoices: ['date', 'company', 'ref', 'due_date', 'po_id', 'amount', 'gst_rate', 'tds_rate', 'notes'],
+  expenses: ['date', 'category', 'amount', 'vendor', 'notes'],
+};
+
+export function CsvImportButton({ kind, label = 'Import', onDone, onImported }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +44,27 @@ export function CsvImportButton({ kind, label = 'Import CSV', onDone, onImported
       <button className="btn ghost sm" type="button" disabled={busy} onClick={() => inputRef.current?.click()}>
         {busy ? 'Importing…' : label}
       </button>
-      <input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={onChange} />
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => downloadCsv(`${kind}_template.csv`, TEMPLATE_HEADERS[kind], [])}
+      >
+        Download CSV Template
+      </button>
+      <button
+        className="btn ghost sm"
+        type="button"
+        onClick={() => downloadXlsx(`${kind}_template.xlsx`, TEMPLATE_HEADERS[kind], [])}
+      >
+        Download Excel Template
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        hidden
+        onChange={onChange}
+      />
     </>
   );
 }

@@ -1,8 +1,11 @@
 import csv
 import io
+import math
+import re
 from datetime import date, datetime
 from typing import Any
 
+from openpyxl import load_workbook
 from sqlalchemy.orm import Session
 
 from app.models import AuditLog, Expense, Invoice, InvoicePayment, PurchaseOrder, RecurringExpense, User
@@ -17,20 +20,124 @@ def num(value: Any) -> float:
         return 0.0
 
 
+_DATE_FORMATS = (
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%d.%m.%Y",
+    "%d/%m/%y",
+    "%d-%b-%Y",
+    "%d-%b-%y",
+    "%d %b %Y",
+    "%m/%d/%Y",
+)
+
+
 def parse_date(value: str | date | None) -> date | None:
     if value is None or value == "":
         return None
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
-    return date.fromisoformat(str(value)[:10])
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        pass
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"invalid date '{text}'")
 
 
-def parse_csv_rows(content: str) -> list[dict[str, str]]:
+def parse_amount(value: Any, field: str = "amount") -> float:
+    """Strict numeric parser for imports: blank -> 0.0, non-numeric junk -> ValueError."""
+    if value is None:
+        return 0.0
+    if isinstance(value, bool):
+        raise ValueError(f"invalid {field} '{value}'")
+    if isinstance(value, (int, float)):
+        if not math.isfinite(value):
+            raise ValueError(f"invalid {field} '{value}'")
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return 0.0
+    cleaned = re.sub(r"^(rs\.?|inr)\s*", "", text, flags=re.IGNORECASE)
+    cleaned = cleaned.replace(",", "").replace("₹", "").replace("%", "").strip()
+    try:
+        result = float(cleaned)
+    except ValueError:
+        raise ValueError(f"invalid {field} '{text}'") from None
+    if not math.isfinite(result):
+        raise ValueError(f"invalid {field} '{text}'")
+    return result
+
+
+def _is_blank_row(values: Any) -> bool:
+    if values is None:
+        return True
+    return all(v is None or (isinstance(v, str) and not v.strip()) for v in values)
+
+
+def _normalize_header(value: Any) -> str:
+    return str(value or "").strip().lower().replace(" ", "_")
+
+
+def _cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def parse_csv_rows(content: str) -> list[tuple[int, dict[str, str]]]:
+    """Return (line_number, row) pairs. Ghost/blank rows are dropped silently."""
     reader = csv.DictReader(io.StringIO(content))
     rows = []
     for raw in reader:
-        rows.append({(k or "").strip().lower().replace(" ", "_"): (v or "").strip() for k, v in raw.items()})
+        values = {_normalize_header(k): (v or "").strip() for k, v in raw.items() if k is not None}
+        if all(v == "" for v in values.values()):
+            continue
+        rows.append((reader.line_num, values))
     return rows
+
+
+def parse_xlsx_rows(content: bytes) -> list[tuple[int, dict[str, str]]]:
+    """Return (worksheet_row_number, row) pairs from the first sheet. Ghost/blank rows are dropped silently."""
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        if ws is None:
+            return []
+        rows_iter = ws.iter_rows(values_only=True)
+        keys: list[str] = []
+        header_row_num = 0
+        for row_num, raw in enumerate(rows_iter, start=1):
+            if _is_blank_row(raw):
+                continue
+            keys = [_normalize_header(h) for h in raw]
+            header_row_num = row_num
+            break
+        if not keys:
+            return []
+        rows = []
+        for row_num, raw in enumerate(rows_iter, start=header_row_num + 1):
+            if _is_blank_row(raw):
+                continue
+            rows.append((row_num, {key: _cell_text(v) for key, v in zip(keys, raw)}))
+        return rows
+    finally:
+        wb.close()
 
 
 def get_field(row: dict[str, str], *names: str) -> str | None:
@@ -88,30 +195,6 @@ def po_calc(po: PurchaseOrder, invoices: list[Invoice]) -> dict:
     remaining = max(0, val - inv)
     pct = min(100, round(inv / val * 100)) if val else 0
     return {"val": val, "inv": inv, "remaining": remaining, "pct": pct}
-
-
-def fy_bounds(ref: date | None = None) -> tuple[date, date]:
-    ref = ref or date.today()
-    year = ref.year if ref.month >= 4 else ref.year - 1
-    return date(year, 4, 1), date(year + 1, 3, 31)
-
-
-def month_bounds(ref: date | None = None) -> tuple[date, date]:
-    ref = ref or date.today()
-    start = date(ref.year, ref.month, 1)
-    if ref.month == 12:
-        end = date(ref.year + 1, 1, 1)
-    else:
-        end = date(ref.year, ref.month + 1, 1)
-    end = end - __import__("datetime").timedelta(days=1)
-    return start, end
-
-
-def in_period(d: date | None, period: str) -> bool:
-    if period == "all" or not d:
-        return period == "all"
-    start, end = fy_bounds() if period == "fy" else month_bounds()
-    return start <= d <= end
 
 
 def generate_recurring(db: Session) -> None:
