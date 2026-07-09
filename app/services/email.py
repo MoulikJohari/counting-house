@@ -1,11 +1,18 @@
 import logging
 import smtplib
+import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.config import settings
 
 logger = logging.getLogger("app.email")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("%(asctime)s | app.email | %(levelname)s | %(message)s"))
+    logger.addHandler(_handler)
+    logger.propagate = False
 
 
 def send_email(to: str, subject: str, html_body: str, text_body: str | None = None) -> bool:
@@ -31,9 +38,10 @@ def send_email(to: str, subject: str, html_body: str, text_body: str | None = No
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.sendmail(settings.smtp_user, [to], msg.as_string())
+        logger.info("Email sent successfully to %s (subject=%r)", to, subject)
         return True
-    except Exception:
-        logger.exception("Failed to send email to %s", to)
+    except Exception as exc:
+        logger.error("Failed to send email to %s: %s: %s", to, type(exc).__name__, exc)
         return False
 
 
