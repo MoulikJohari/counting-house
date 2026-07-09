@@ -1,8 +1,8 @@
+import json
 import logging
-import smtplib
 import sys
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import urllib.error
+import urllib.request
 
 from app.config import settings
 
@@ -14,32 +14,52 @@ if not logger.handlers:
     logger.addHandler(_handler)
     logger.propagate = False
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
 
 def send_email(to: str, subject: str, html_body: str, text_body: str | None = None) -> bool:
     """
-    Sends a single email via SMTP (Gmail by default, per settings).
+    Sends a single email via the Brevo HTTP API (port 443 — not blocked by Render's
+    free-tier SMTP port restriction, unlike raw smtplib).
     Returns True if the send succeeded, False otherwise.
     Never raises — a broken email config should not break login/signup flows.
     """
-    if not settings.smtp_user or not settings.smtp_password:
-        logger.warning("SMTP not configured (smtp_user/smtp_password empty) — skipping email to %s", to)
+    if not settings.brevo_api_key:
+        logger.warning("BREVO_API_KEY not configured — skipping email to %s", to)
         return False
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email or settings.smtp_user}>"
-    msg["To"] = to
+    payload = {
+        "sender": {
+            "name": settings.smtp_from_name,
+            "email": settings.smtp_from_email,
+        },
+        "to": [{"email": to}],
+        "subject": subject,
+        "htmlContent": html_body,
+    }
+    if text_body:
+        payload["textContent"] = text_body
 
-    msg.attach(MIMEText(text_body or html_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    req = urllib.request.Request(
+        BREVO_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "accept": "application/json",
+            "content-type": "application/json",
+            "api-key": settings.brevo_api_key,
+        },
+    )
 
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(settings.smtp_user, [to], msg.as_string())
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
         logger.info("Email sent successfully to %s (subject=%r)", to, subject)
         return True
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.error("Brevo rejected email to %s: HTTP %s: %s", to, exc.code, body)
+        return False
     except Exception as exc:
         logger.error("Failed to send email to %s: %s: %s", to, type(exc).__name__, exc)
         return False

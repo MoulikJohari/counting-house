@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_from_name: str = "Counting House"
 
+    # Brevo HTTP API (used instead of raw SMTP — Render's free tier blocks SMTP ports)
+    brevo_api_key: str = ""
+
     # Used to build links inside emails (e.g. password reset links)
     frontend_url: str = "http://localhost:5173"
 
