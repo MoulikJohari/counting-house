@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     superadmin_name: str = "Super Admin"
     cors_origins: str = "http://localhost:5173"
 
+    # SMTP / outgoing email settings
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "Counting House"
+
+    # Used to build links inside emails (e.g. password reset links)
+    frontend_url: str = "http://localhost:5173"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

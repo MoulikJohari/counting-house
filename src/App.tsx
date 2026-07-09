@@ -4,10 +4,12 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { LedgerProvider } from './ledger/LedgerContext';
 import { DashboardPage } from './pages/DashboardPage';
 import { ExpensesPage } from './pages/ExpensesPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { LoginPage } from './pages/LoginPage';
 import { LogsPage } from './pages/LogsPage';
 import { PurchaseOrdersPage } from './pages/PurchaseOrdersPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { UsersPage } from './pages/UsersPage';
 import './styles/ledger.css';
 
@@ -18,6 +20,8 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route
               path="/"
               element={

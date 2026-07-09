@@ -31,6 +31,32 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode({"sub": user_id, "exp": expire}, settings.jwt_secret, algorithm=ALGORITHM)
 
 
+def create_reset_token(user_id: str) -> str:
+    """Short-lived token used only for password reset links (not a login token)."""
+    expire = datetime.utcnow() + timedelta(minutes=30)
+    return jwt.encode(
+        {"sub": user_id, "exp": expire, "purpose": "password_reset"},
+        settings.jwt_secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def verify_reset_token(token: str) -> str:
+    """Returns the user_id encoded in a reset token, or raises HTTPException if invalid/expired."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link") from exc
+
+    if payload.get("purpose") != "password_reset":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset token")
+    return user_id
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
